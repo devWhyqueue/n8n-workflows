@@ -1,0 +1,129 @@
+{
+  "id": "gmailInboxCleanupLive01",
+  "name": "Gmail Inbox Cleanup Live",
+  "active": true,
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Daily Cleanup Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -760,
+        140
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 3,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gmail-get-many",
+      "name": "Find Matching Gmail Messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -420,
+        40
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {
+          "q": "in:inbox is:read older_than:1m has:userlabels"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmailCleanupCred01",
+          "name": "Gmail Inbox Cleanup OAuth2"
+        }
+      }
+    },
+    {
+      "id": "summarize-results",
+      "name": "Summarize Cleanup Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        40
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst sample = items.slice(0, 10).map((item) => ({\n  id: item.json.id ?? item.json.messageId ?? null,\n  threadId: item.json.threadId ?? null,\n  labelIds: item.json.labelIds ?? null,\n  snippet: item.json.snippet ?? null,\n  subject: item.json.subject ?? null,\n}));\nreturn [{ json: {\n  query: 'in:inbox is:read older_than:1m has:userlabels',\n  matchedCount: items.length,\n  sampleMessages: sample,\n  liveArchiveEnabled: true,\n  removedLabel: 'INBOX',\n} }];"
+      }
+    },
+    {
+      "id": "remove-inbox-label",
+      "name": "Archive by Removing INBOX",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -120,
+        260
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "removeLabels",
+        "messageId": "={{ $json.id ?? $json.messageId }}",
+        "labelIds": [
+          "INBOX"
+        ]
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmailCleanupCred01",
+          "name": "Gmail Inbox Cleanup OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Cleanup Schedule": {
+      "main": [
+        [
+          {
+            "node": "Find Matching Gmail Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Matching Gmail Messages": {
+      "main": [
+        [
+          {
+            "node": "Summarize Cleanup Results",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Archive by Removing INBOX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "pinData": {},
+  "meta": null,
+  "staticData": null,
+  "tags": [],
+  "versionId": "93e6af99-5927-4cbf-bdfb-76c4f5ff8dad"
+}

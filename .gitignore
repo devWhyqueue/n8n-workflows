@@ -1,2 +1,3 @@
 __pycache__/
-client_secret*
+workflows/**/__pycache__/
+workflows/**/client_secret*
