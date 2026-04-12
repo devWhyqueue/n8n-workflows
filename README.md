@@ -19,10 +19,10 @@ This repo stores importable n8n workflows plus small helper scripts used to prov
 - Trigger: daily at `02:15` in `Europe/Berlin`
 - Behavior:
   - fetches Google Contacts birthdays with pagination from the People API
-  - generates birthday events for the current year and next year at `10:00` in `Europe/Berlin`
+  - generates birthday events for the current year and next year at `14:00` in `Europe/Berlin`
   - uses private extended properties to track managed events
   - creates missing events, updates changed events, and deletes stale managed events
-  - sets a popup reminder at event start so the notification lands at `10:00` on the birthday
+  - sets a popup reminder at event start so the notification lands at `14:00` on the birthday
 - Credential requirements:
   - `oAuth2Api`
   - Google OAuth scopes:
@@ -103,12 +103,36 @@ Import credentials the same way with JSON payloads matching n8n's credential for
 sudo docker restart n8n-n8n-1
 ```
 
+## Deployment Notes
+
+- `n8n import:workflow` deactivates the imported workflow on this server, even if the JSON has `"active": true`.
+- After every import, explicitly re-activate the workflow before leaving the deployment finished.
+- For this n8n build, `n8n execute --id=...` is not reliable for schedule-trigger workflows. It can fail with task-broker port conflicts or `Missing node to start execution`.
+- The reliable one-off run path for an already imported workflow is the live n8n HTTP API:
+  - log in to `POST /rest/login`
+  - fetch the workflow from `GET /rest/workflows/:id`
+  - activate it with `POST /rest/workflows/:id/activate` and the current `versionId`
+  - run it once with `POST /rest/workflows/:id/run`
+- For schedule-trigger workflows, the manual run payload should use the trigger node name, for example:
+
+```json
+{
+  "triggerToStartFrom": {
+    "name": "Daily Birthday Sync Schedule"
+  }
+}
+```
+
+- If you copy a workflow file to the host first, verify the file inside the container before importing. Do not assume `/tmp/...` on the host and `/tmp/...` in the container still match.
+- Google Calendar's UI-level all-day default notifications do not show up as API `defaultReminders`, so `useDefault: true` is not reliable for API-created all-day birthday events on this calendar.
+- The current birthday workflow therefore uses timed events plus an explicit popup reminder instead of all-day events.
+
 ## Manual Verification
 
 Run the birthday mirror workflow once after import:
 
 ```bash
-sudo docker exec n8n-n8n-1 n8n execute --id=googleContactsBirthdayMirror01
+# Prefer the live n8n API for schedule-trigger workflows on this server.
 ```
 
 Then verify the dedicated Google Calendar contains the expected generated birthday events.
